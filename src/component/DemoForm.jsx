@@ -1,17 +1,80 @@
+/* eslint-disable react/prop-types */
 import { useState } from "react";
+import Swal from "sweetalert2";
 
-// eslint-disable-next-line react/prop-types
-const DemoForm = ({ onSubmit, onPrev }) => {
-  // You can receive onSubmit & onPrev as props to integrate with multi-step flow.
+const DemoForm = ({  onPrev }) => {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [agreed, setAgreed] = useState(false);
+  const [loading, setLoading] = useState(false); // For loading state
+  const [error, setError] = useState(null); // For error handling
+  const [success, setSuccess] = useState(null); // For success message
+  const [validationErrors, setValidationErrors] = useState({}); // Validation errors
 
-  const handleSubmit = (e) => {
+  const validateForm = () => {
+    const errors = {};
+
+    if (!fullName.trim()) errors.fullName = "Full Name is required.";
+    if (!phone.trim() || !/^\d{10}$/.test(phone))
+      errors.phone = "Phone number must be 10 digits.";
+    if (!email.trim() || !/\S+@\S+\.\S+/.test(email))
+      errors.email = "A valid email is required.";
+    if (!agreed) errors.agreed = "You must agree to the terms and conditions.";
+
+    return errors;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Pass form data up to parent if needed
-    onSubmit({ fullName, phone, email, agreed });
+    setValidationErrors({}); // Reset validation errors
+    const errors = validateForm();
+
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+
+    const formData = { fullName, phone, email, agreed };
+
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch("https://cooler-backend.onrender.com/api/forms", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to submit the form");
+      }
+
+      // const data = await response.json();
+      Swal.fire({
+        title: "Thank you!",
+        text: "Form submitted successfully!",
+        icon: "success"
+      });
+
+      // Call onSubmit if provided by parent component
+      // if (onSubmit) onSubmit(data);
+
+      // Clear form
+      setFullName("");
+      setPhone("");
+      setEmail("");
+      setAgreed(false);
+    } catch (err) {
+      setError(err.message || "An error occurred during submission");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -29,12 +92,17 @@ const DemoForm = ({ onSubmit, onPrev }) => {
           id="fullName"
           type="text"
           placeholder="Full Name"
-          required
-          className="mb-4 w-full rounded-md border border-gray-300 px-3 py-2
-            focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className={`mb-2 w-full rounded-md border px-3 py-2 ${
+            validationErrors.fullName
+              ? "border-red-500"
+              : "border-gray-300 focus:ring-blue-500"
+          } focus:outline-none`}
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
         />
+        {validationErrors.fullName && (
+          <p className="text-red-500 text-sm mb-4">{validationErrors.fullName}</p>
+        )}
 
         {/* Phone */}
         <label htmlFor="phone" className="block font-medium mb-1">
@@ -44,12 +112,17 @@ const DemoForm = ({ onSubmit, onPrev }) => {
           id="phone"
           type="tel"
           placeholder="Phone"
-          required
-          className="mb-4 w-full rounded-md border border-gray-300 px-3 py-2
-            focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className={`mb-2 w-full rounded-md border px-3 py-2 ${
+            validationErrors.phone
+              ? "border-red-500"
+              : "border-gray-300 focus:ring-blue-500"
+          } focus:outline-none`}
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
+        {validationErrors.phone && (
+          <p className="text-red-500 text-sm mb-4">{validationErrors.phone}</p>
+        )}
 
         {/* Email */}
         <label htmlFor="email" className="block font-medium mb-1">
@@ -59,15 +132,20 @@ const DemoForm = ({ onSubmit, onPrev }) => {
           id="email"
           type="email"
           placeholder="Email"
-          required
-          className="mb-4 w-full rounded-md border border-gray-300 px-3 py-2
-            focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className={`mb-2 w-full rounded-md border px-3 py-2 ${
+            validationErrors.email
+              ? "border-red-500"
+              : "border-gray-300 focus:ring-blue-500"
+          } focus:outline-none`}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
+        {validationErrors.email && (
+          <p className="text-red-500 text-sm mb-4">{validationErrors.email}</p>
+        )}
 
         {/* Checkbox */}
-        <div className="flex items-start mb-6">
+        <div className="flex items-start mb-2">
           <input
             id="agree"
             type="checkbox"
@@ -89,9 +167,17 @@ const DemoForm = ({ onSubmit, onPrev }) => {
             receive text messages from the business.
           </label>
         </div>
+        {validationErrors.agreed && (
+          <p className="text-red-500 text-sm mb-4">{validationErrors.agreed}</p>
+        )}
 
         {/* Instruction text */}
         <h2 className="text-2xl font-semibold mb-4">Click submit when done</h2>
+
+        {/* Error and Success Messages */}
+        {error && <p className="text-red-500 mb-4">{error}</p>}
+        {success && <p className="text-green-500 mb-4">{success}</p>}
+        {loading && <p className="text-blue-500 mb-4">Submitting...</p>}
       </form>
 
       {/* Bottom bar with PREV / SUBMIT */}
@@ -111,8 +197,9 @@ const DemoForm = ({ onSubmit, onPrev }) => {
           type="submit"
           onClick={handleSubmit}
           className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded text-base"
+          disabled={loading} // Disable while loading
         >
-          SUBMIT
+          {loading ? "Submitting..." : "SUBMIT"}
         </button>
       </div>
     </div>
